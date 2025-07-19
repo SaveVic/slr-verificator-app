@@ -44,7 +44,9 @@ def dashboard_redirect():
 @login_required
 def dashboard(article_id):
     """Displays a single article and navigation."""
-    article = Article.query.get_or_404(article_id)
+    article = Article.query.options(db.joinedload(Article.llm_results)).get_or_404(
+        article_id
+    )
 
     prev_article = (
         Article.query.filter(Article.id < article_id)
