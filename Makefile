@@ -21,3 +21,6 @@ all:
 	make articles
 	make assign
 	make llm
+
+req:
+	pip freeze > requirements.txt
