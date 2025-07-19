@@ -6,129 +6,164 @@ import os
 import re
 from app import db
 from app.models import User, Article, LLMResult
+from sqlalchemy.exc import IntegrityError
 
 
 def register_commands(app):
-    """Register CLI commands with the Flask app."""
+    """Register all custom CLI commands with the Flask app."""
 
-    @app.cli.command("seed-db")
-    @click.argument("zip_filepath", type=click.Path(exists=True))
-    @click.option(
-        "--model-name", default="GPT-4-Analysis", help="Name of the LLM model used."
-    )
-    def seed_db(zip_filepath, model_name):
-        """
-        Seeds the database with users, articles, and LLM results from a zip file.
+    @app.cli.command("init-db")
+    def init_db():
+        """Creates all database tables from the models. Run this first."""
+        db.create_all()
+        click.echo("Database tables created.")
 
-        ZIP_FILEPATH: Path to the zip file containing .pkl results.
-        """
+    @app.cli.command("seed-users")
+    def seed_users():
+        """Seeds the database with predefined users."""
         with app.app_context():
-            click.echo("Dropping all tables and recreating...")
-            db.drop_all()
-            db.create_all()
-
-            # --- Seed Users ---
             click.echo("Seeding users...")
             users_to_seed = [
-                {"username": "viewer1", "password": "password123"},
-                {"username": "viewer2", "password": "password456"},
-                {"username": "admin", "password": "adminpassword"},
+                {"username": "waff", "password": "waff"},
+                {"username": "elva", "password": "elva"},
             ]
             for user_data in users_to_seed:
-                new_user = User(username=user_data["username"])
-                new_user.set_password(user_data["password"])
-                db.session.add(new_user)
+                user = User.query.filter_by(username=user_data["username"]).first()
+                if not user:
+                    new_user = User(username=user_data["username"])
+                    new_user.set_password(user_data["password"])
+                    db.session.add(new_user)
+                    click.echo(f"  - User '{user_data['username']}' created.")
+                else:
+                    click.echo(
+                        f"  - User '{user_data['username']}' already exists. Skipping."
+                    )
             db.session.commit()
-            click.echo("Users seeded.")
+            click.echo("User seeding complete.")
 
-            # --- Seed Articles ---
-            click.echo("Seeding articles from CSV...")
+    @app.cli.command("seed-articles")
+    @click.argument("csv_filepath", type=click.Path(exists=True))
+    def seed_articles(csv_filepath):
+        """Seeds the database with articles from a CSV file."""
+        with app.app_context():
+            click.echo(f"Seeding articles from '{csv_filepath}'...")
             try:
-                csv_path = "data/research_articles.csv"
-                df = pd.read_csv(csv_path)
-                # Ensure the 'source' column exists, fill missing with None
+                df = pd.read_csv(csv_filepath)
                 if "source" not in df.columns:
                     df["source"] = None
+
                 for index, row in df.iterrows():
-                    article = Article(
-                        doi=row["DOI"],
-                        title=row["Title"],
-                        abstract=row["Abstract"],
-                        year=int(row["Year"]) if pd.notna(row["Year"]) else None,
-                        source=row["source"] if pd.notna(row["source"]) else None,
-                    )
-                    db.session.add(article)
-                db.session.commit()
-                click.echo(f"{len(df)} articles processed and seeded.")
-            except FileNotFoundError:
-                click.echo(
-                    f"Error: '{csv_path}' not found. Make sure it's in the /data directory."
-                )
-                return
-            except Exception as e:
-                click.echo(f"An error occurred during article seeding: {e}")
-                db.session.rollback()
-                return
-
-            # --- Seed LLM Results from Zip File ---
-            click.echo(f"Processing LLM results from '{zip_filepath}'...")
-            try:
-                with zipfile.ZipFile(zip_filepath, "r") as z:
-                    for filename in z.namelist():
-                        # Ignore macOS metadata files and folders
-                        if filename.startswith("__MACOSX/") or filename.endswith("/"):
-                            continue
-
-                        # Extract article ID from filename "res-{id}.pkl"
-                        match = re.search(r"res-(\d+)\.pkl$", filename)
-                        if not match:
-                            click.echo(f"  - Skipping non-matching file: {filename}")
-                            continue
-
-                        article_id = int(match.group(1))
-
-                        # Check if the corresponding article exists
-                        article = Article.query.get(article_id)
-                        if not article:
-                            click.echo(
-                                f"  - Warning: No article found for ID {article_id}. Skipping."
-                            )
-                            continue
-
-                        # Load the pickle data
-                        with z.open(filename) as pkl_file:
-                            data = pickle.load(pkl_file)
-
-                        # Create the LLMResult object
-                        result_data = data.get("result", {})
-                        usage_data = data.get("usage", {})
-
-                        llm_result = LLMResult(
-                            success=data.get("success", False),
-                            raw=data.get("raw"),
-                            is_relevant=result_data.get("is_relevant"),
-                            justification=result_data.get("justification"),
-                            duration=usage_data.get("duration"),
-                            num_token_in=usage_data.get("num_token_in"),
-                            num_token_out=usage_data.get("num_token_out"),
-                            llm_model_name=model_name,
-                            article_id=article_id,
+                    # Check if article with this DOI already exists
+                    exists = Article.query.filter_by(doi=row["DOI"]).first()
+                    if not exists:
+                        article = Article(
+                            doi=row["DOI"],
+                            title=row["Title"],
+                            abstract=row["Abstract"],
+                            year=int(row["Year"]) if pd.notna(row["Year"]) else None,
+                            source=row["source"] if pd.notna(row["source"]) else None,
                         )
-                        # Use the setter for addressed_areas
-                        llm_result.addressed_areas = result_data.get("addressed_areas")
-
-                        db.session.add(llm_result)
-                        click.echo(f"  - Loaded result for article ID {article_id}.")
+                        db.session.add(article)
+                        click.echo(f"  - Added article: {row['DOI']}")
+                    else:
+                        click.echo(
+                            f"  - Article with DOI {row['DOI']} already exists. Skipping."
+                        )
 
                 db.session.commit()
-                click.echo("LLM results seeded successfully.")
-
-            except zipfile.BadZipFile:
-                click.echo(
-                    f"Error: The file at '{zip_filepath}' is not a valid zip file."
-                )
+                click.echo("Article seeding complete.")
             except Exception as e:
-                click.echo(f"An error occurred during LLM result seeding: {e}")
+                click.echo(f"An error occurred during article seeding: {e}", err=True)
                 db.session.rollback()
 
-        click.echo("Database seeding complete!")
+    @app.cli.command("seed-llm")
+    @click.argument("zip_filepaths", nargs=-1, type=click.Path(exists=True))
+    @click.option(
+        "--model-name", default="Unknown-LLM", help="Name of the LLM model used."
+    )
+    @click.option("--cost-in", type=float, default=1, help="LLM input cost / 1M tokens")
+    @click.option(
+        "--cost-out", type=float, default=1, help="LLM output cost / 1M tokens"
+    )
+    def seed_llm(zip_filepaths, model_name, cost_in, cost_out):
+        """Seeds the database with LLM results from one or more zip files."""
+        if not zip_filepaths:
+            click.echo(
+                "No zip files provided. Please specify the path to at least one zip file.",
+                err=True,
+            )
+            return
+
+        with app.app_context():
+            for zip_filepath in zip_filepaths:
+                click.echo(
+                    f"\nProcessing LLM results for model '{model_name}' from '{zip_filepath}'..."
+                )
+
+                try:
+                    with zipfile.ZipFile(zip_filepath, "r") as z:
+                        for filename in z.namelist():
+                            if filename.startswith("__MACOSX/") or filename.endswith(
+                                "/"
+                            ):
+                                continue
+
+                            match = re.search(r"res-(\d+)\.pkl$", filename)
+                            if not match:
+                                continue
+
+                            article_id = int(match.group(1))
+                            if not Article.query.get(article_id):
+                                click.echo(
+                                    f"  - Warning: No article found for ID {article_id}. Skipping.",
+                                    err=True,
+                                )
+                                continue
+
+                            # Check if this specific result already exists
+                            exists = LLMResult.query.filter_by(
+                                article_id=article_id, llm_model_name=model_name
+                            ).first()
+                            if exists:
+                                click.echo(
+                                    f"  - Result for article ID {article_id} and model '{model_name}' already exists. Skipping."
+                                )
+                                continue
+
+                            with z.open(filename) as pkl_file:
+                                data = pickle.load(pkl_file)
+
+                            result_data = data.get("result", {})
+                            usage_data = data.get("usage", {})
+
+                            llm_result = LLMResult(
+                                success=data.get("success", False),
+                                raw=data.get("raw"),
+                                is_relevant=result_data.get("is_relevant"),
+                                justification=result_data.get("justification"),
+                                duration=usage_data.get("duration"),
+                                num_token_in=usage_data.get("num_token_in", 0)
+                                * cost_in,
+                                num_token_out=usage_data.get("num_token_out", 0)
+                                * cost_out,
+                                llm_model_name=model_name,
+                                article_id=article_id,
+                            )
+                            llm_result.addressed_areas = result_data.get(
+                                "addressed_areas"
+                            )
+
+                            db.session.add(llm_result)
+                            click.echo(
+                                f"  - Adding result for article ID {article_id}."
+                            )
+
+                    db.session.commit()
+                    click.echo(f"Finished processing '{zip_filepath}'.")
+                except Exception as e:
+                    click.echo(
+                        f"An error occurred processing {zip_filepath}: {e}", err=True
+                    )
+                    db.session.rollback()
+
+        click.echo("\nLLM result seeding process complete!")
