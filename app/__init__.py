@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager
 from config import Config
@@ -50,5 +50,9 @@ def create_app(config_class=Config):
     @login_manager.user_loader
     def load_user(user_id):
         return User.query.get(int(user_id))
+
+    @app.errorhandler(403)
+    def forbidden(error):
+        return render_template("errors/403.html"), 403
 
     return app
