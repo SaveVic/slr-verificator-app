@@ -25,7 +25,13 @@ def register_commands(app):
             click.echo("Seeding users...")
             users_to_seed = [
                 {"username": "waff", "password": "waff"},
+                {"username": "hady", "password": "hady"},
+                {"username": "amal", "password": "amal"},
+                {"username": "wicak", "password": "wicak"},
                 {"username": "elva", "password": "elva"},
+                {"username": "fadil", "password": "fadil"},
+                {"username": "humay", "password": "humay"},
+                {"username": "admin", "password": "admin"},
             ]
             for user_data in users_to_seed:
                 user = User.query.filter_by(username=user_data["username"]).first()

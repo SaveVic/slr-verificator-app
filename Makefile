@@ -1,6 +1,9 @@
+users:
+	flask seed-users
+
 init:
 	flask init-db
-	flask seed-users
+	make users
 	flask seed-articles data/research_articles.csv
 
 llm:
