@@ -48,6 +48,8 @@ class VerificationAssignment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     article_id = db.Column(db.Integer, db.ForeignKey("article.id"), nullable=False)
+    is_relevant = db.Column(db.Boolean, nullable=True, default=None)
+    is_reviewed = db.Column(db.Boolean, nullable=False, default=False)
 
     # Ensures a user can only be assigned to the same article once
     __table_args__ = (
