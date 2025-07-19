@@ -1,3 +1,5 @@
+from collections import defaultdict
+import random
 import click
 import pandas as pd
 import pickle
@@ -5,7 +7,7 @@ import zipfile
 import os
 import re
 from app import db
-from app.models import User, Article, LLMResult
+from app.models import User, Article, LLMResult, VerificationAssignment
 from sqlalchemy.exc import IntegrityError
 
 
@@ -24,14 +26,14 @@ def register_commands(app):
         with app.app_context():
             click.echo("Seeding users...")
             users_to_seed = [
-                {"username": "waff", "password": "waff"},
-                {"username": "hady", "password": "hady"},
-                {"username": "amal", "password": "amal"},
-                {"username": "wicak", "password": "wicak"},
-                {"username": "elva", "password": "elva"},
-                {"username": "fadil", "password": "fadil"},
-                {"username": "humay", "password": "humay"},
-                {"username": "admin", "password": "admin"},
+                {"username": "waff", "password": "waff", "role": "verificator"},
+                {"username": "hady", "password": "hady", "role": "verificator"},
+                {"username": "amal", "password": "amal", "role": "verificator"},
+                {"username": "wicak", "password": "wicak", "role": "verificator"},
+                {"username": "elva", "password": "elva", "role": "verificator"},
+                {"username": "fadil", "password": "fadil", "role": "verificator"},
+                {"username": "humay", "password": "humay", "role": "verificator"},
+                {"username": "admin", "password": "admin", "role": "admin"},
             ]
             for user_data in users_to_seed:
                 user = User.query.filter_by(username=user_data["username"]).first()
@@ -39,10 +41,14 @@ def register_commands(app):
                     new_user = User(username=user_data["username"])
                     new_user.set_password(user_data["password"])
                     db.session.add(new_user)
-                    click.echo(f"  - User '{user_data['username']}' created.")
-                else:
                     click.echo(
-                        f"  - User '{user_data['username']}' already exists. Skipping."
+                        f"  - User '{user_data['username']}' ({user_data['role']}) created."
+                    )
+                else:
+                    # Optionally update the role of existing users
+                    user.role = user_data["role"]
+                    click.echo(
+                        f"  - User '{user_data['username']}' already exists. Role set to '{user_data['role']}'."
                     )
             db.session.commit()
             click.echo("User seeding complete.")
@@ -173,3 +179,84 @@ def register_commands(app):
                     db.session.rollback()
 
         click.echo("\nLLM result seeding process complete!")
+
+    @app.cli.command("seed-assignments")
+    def seed_assignments():
+        """Assigns each article to two different verificators randomly and evenly."""
+        with app.app_context():
+            click.echo("Creating verification assignments...")
+
+            # Clear existing assignments to ensure a fresh start
+            VerificationAssignment.query.delete()
+            db.session.commit()
+            click.echo("  - Cleared all previous assignments.")
+
+            articles = Article.query.all()
+            verificators = User.query.filter_by(role="verificator").all()
+
+            if not articles:
+                click.echo(
+                    "Error: No articles found in the database. Please run 'seed-articles' first.",
+                    err=True,
+                )
+                return
+            if len(verificators) < 2:
+                click.echo(
+                    "Error: At least two users with the 'verificator' role are required.",
+                    err=True,
+                )
+                return
+
+            article_ids = [a.id for a in articles]
+            verificator_ids = [v.id for v in verificators]
+
+            # Create a list of all review slots that need to be filled (2 for each article)
+            review_slots = article_ids * 2
+            random.shuffle(review_slots)
+
+            # Dictionary to track assignments and prevent duplicates
+            assignments = defaultdict(list)
+            # Dictionary to track the load of each verificator
+            load = defaultdict(int)
+
+            for article_id in review_slots:
+                # Sort verificators by their current load, then randomly to break ties
+                sorted_verificators = sorted(
+                    verificator_ids, key=lambda v_id: (load[v_id], random.random())
+                )
+
+                assigned_verificator = None
+                for v_id in sorted_verificators:
+                    # Find a verificator who is not already assigned to this article
+                    if v_id not in assignments[article_id]:
+                        assigned_verificator = v_id
+                        break
+
+                if assigned_verificator:
+                    assignments[article_id].append(assigned_verificator)
+                    load[assigned_verificator] += 1
+                else:
+                    # This case should ideally not be hit with this logic, but is a safeguard
+                    click.echo(
+                        f"Warning: Could not find a suitable second verificator for article {article_id}",
+                        err=True,
+                    )
+
+            # Create the assignment objects in the database
+            new_assignments_count = 0
+            for article_id, assigned_ids in assignments.items():
+                for user_id in assigned_ids:
+                    assignment = VerificationAssignment(
+                        article_id=article_id, user_id=user_id
+                    )
+                    db.session.add(assignment)
+                    new_assignments_count += 1
+
+            db.session.commit()
+            click.echo(
+                f"  - Successfully created {new_assignments_count} new assignments."
+            )
+            click.echo("Assignment distribution:")
+            for v_id, count in sorted(load.items()):
+                user = User.query.get(v_id)
+                click.echo(f"  - {user.username}: {count} articles")

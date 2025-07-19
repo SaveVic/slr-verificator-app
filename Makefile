@@ -1,10 +1,14 @@
+init:
+	flask init-db
+
 users:
 	flask seed-users
 
-init:
-	flask init-db
-	make users
+articles:
 	flask seed-articles data/research_articles.csv
+
+assign:
+	flask seed-assignments
 
 llm:
 	flask seed-llm data\llama.zip --model-name="Llama-4-Maverick" --cost-in=0.27 --cost-out=0.85
