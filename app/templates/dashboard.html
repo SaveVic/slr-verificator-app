@@ -11,7 +11,7 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .abstract-content {
-            height: 30vh; /* Adjust as needed */
+            max-height: 30vh; /* Adjust as needed */
             overflow-y: auto;
         }
     </style>
@@ -40,73 +40,133 @@
     </header>
 
     <!-- Main Content -->
-    <main class="py-6">
-        <div class="max-w-5xl mx-auto sm:px-6 lg:px-8">
-            {% if article %}
-            <div class="bg-white overflow-hidden shadow-xl rounded-lg">
-                <div class="p-4 sm:p-6 border-b border-gray-200">
-                    <!-- Article Header -->
-                    <div class="flex justify-between items-start">
-                        <div>
-                            <p class="text-sm font-medium text-indigo-600">{{ article.doi }}</p>
-                            <h2 class="mt-1 text-xl font-bold text-gray-900">{{ article.title }}</h2>
+    <main class="py-10">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Left Column: Article Details -->
+            <div class="lg:col-span-2">
+                {% if article %}
+                <div class="bg-white overflow-hidden shadow-xl rounded-lg">
+                    <div class="p-6 sm:p-8 border-b border-gray-200">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-indigo-600">{{ article.doi }}</p>
+                                <h2 class="mt-1 text-2xl font-bold text-gray-900">{{ article.title }}</h2>
+                            </div>
+                            <div class="flex-shrink-0 ml-4 text-right">
+                                <span class="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
+                                    Year: {{ article.year if article.year else 'N/A' }}
+                                </span>
+                                {% if article.source %}
+                                <span class="mt-2 inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+                                    Source: {{ article.source }}
+                                </span>
+                                {% endif %}
+                            </div>
                         </div>
-                        <span class="flex-shrink-0 ml-4 inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                            Year: {{ article.year if article.year else 'N/A' }}
+                    </div>
+                    <div class="p-6 sm:p-8">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-3">Abstract</h3>
+                        <div class="prose prose-indigo text-gray-600 max-w-none abstract-content pr-4">
+                            <p>{{ article.abstract if article.abstract else 'No abstract available.' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Navigation -->
+                <div class="mt-8 flex justify-between">
+                    {% if prev_id %}
+                        <a href="{{ url_for('main.dashboard', article_id=prev_id) }}" class="inline-flex items-center pl-3 pr-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            Previous
+                        </a>
+                    {% else %}
+                        <span class="inline-flex items-center pl-3 pr-4 py-2 border border-gray-200 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed">
+                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" /></svg>
+                            Previous
                         </span>
-                    </div>
+                    {% endif %}
+                    
+                    {% if next_id %}
+                        <a href="{{ url_for('main.dashboard', article_id=next_id) }}" class="inline-flex items-center pr-3 pl-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Next
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m-7-7h18" /></svg>
+                        </a>
+                    {% else %}
+                         <span class="inline-flex items-center pr-3 pl-4 py-2 border border-gray-200 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed">
+                            Next
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m-7-7h18" /></svg>
+                        </span>
+                    {% endif %}
                 </div>
-
-                <!-- Article Abstract -->
-                <div class="p-4 sm:p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-3">Abstract</h3>
-                    <div class="prose prose-indigo text-gray-600 max-w-none abstract-content pr-4">
-                        <p>{{ article.abstract if article.abstract else 'No abstract available.' }}</p>
-                    </div>
+                {% else %}
+                <div class="text-center py-12 lg:col-span-3">
+                    <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <h3 class="mt-2 text-sm font-medium text-gray-900">No Articles Found</h3>
+                    <p class="mt-1 text-sm text-gray-500">The database does not contain any articles yet.</p>
                 </div>
-            </div>
-
-            <!-- Navigation -->
-            <div class="mt-8 flex justify-between">
-                {% if prev_id %}
-                    <a href="{{ url_for('main.dashboard', article_id=prev_id) }}" class="inline-flex items-center pl-3 pr-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        Previous
-                    </a>
-                {% else %}
-                    <span class="inline-flex items-center pl-3 pr-4 py-2 border border-gray-200 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed">
-                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                        </svg>
-                        Previous
-                    </span>
-                {% endif %}
-                
-                {% if next_id %}
-                    <a href="{{ url_for('main.dashboard', article_id=next_id) }}" class="inline-flex items-center pr-3 pl-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        Next
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m-7-7h18" />
-                        </svg>
-                    </a>
-                {% else %}
-                     <span class="inline-flex items-center pr-3 pl-4 py-2 border border-gray-200 text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed">
-                        Next
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                          <path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m-7-7h18" />
-                        </svg>
-                    </span>
                 {% endif %}
             </div>
-            {% else %}
-            <div class="text-center py-12">
-                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                <h3 class="mt-2 text-sm font-medium text-gray-900">No Articles Found</h3>
-                <p class="mt-1 text-sm text-gray-500">The database does not contain any articles yet.</p>
+
+            <!-- Right Column: LLM Analysis -->
+            <div class="lg:col-span-1">
+                {% if article and article.llm_result %}
+                <div class="bg-white shadow-xl rounded-lg sticky top-10">
+                    <div class="p-6">
+                        <h3 class="text-lg font-bold text-gray-900">LLM Analysis</h3>
+                        <p class="text-sm text-gray-500 mt-1">Result from: <span class="font-semibold">{{ article.llm_result.llm_model_name }}</span></p>
+                        
+                        <div class="mt-6">
+                            <dl class="space-y-4">
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Relevance</dt>
+                                    <dd class="mt-1">
+                                        {% if article.llm_result.is_relevant %}
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Relevant</span>
+                                        {% else %}
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">Not Relevant</span>
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Justification</dt>
+                                    <dd class="mt-1 text-sm text-gray-700">{{ article.llm_result.justification }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-sm font-medium text-gray-500">Addressed Areas</dt>
+                                    <dd class="mt-1">
+                                        {% if article.llm_result.addressed_areas %}
+                                            <div class="flex flex-wrap gap-2">
+                                            {% for area in article.llm_result.addressed_areas %}
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">{{ area }}</span>
+                                            {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="text-sm text-gray-500 italic">None specified.</span>
+                                        {% endif %}
+                                    </dd>
+                                </div>
+                                <div class="border-t border-gray-200 pt-4">
+                                    <dt class="text-sm font-medium text-gray-500">Usage Stats</dt>
+                                    <dd class="mt-1 text-sm text-gray-700">
+                                        <ul class="list-disc list-inside space-y-1">
+                                            <li>Duration: {{ "%.2f"|format(article.llm_result.duration) }}s</li>
+                                            <li>Input Tokens: {{ article.llm_result.num_token_in }}</li>
+                                            <li>Output Tokens: {{ article.llm_result.num_token_out }}</li>
+                                        </ul>
+                                    </dd>
+                                </div>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+                {% elif article %}
+                <div class="bg-white shadow-xl rounded-lg sticky top-10 p-6 text-center">
+                     <h3 class="text-lg font-bold text-gray-900">LLM Analysis</h3>
+                     <p class="mt-4 text-sm text-gray-500">No LLM result found for this article.</p>
+                </div>
+                {% endif %}
             </div>
-            {% endif %}
         </div>
     </main>
 
