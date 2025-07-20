@@ -8,65 +8,68 @@
 {% endblock %}
 
 {% block content %}
-<div class="bg-white overflow-hidden shadow-xl rounded-lg">
-    <div class="p-6 sm:px-8 border-b border-gray-200">
-        <h2 class="text-2xl font-bold text-gray-900">LLM Relevance Analysis</h2>
-        <p class="mt-1 text-sm text-gray-600">Distribution of articles based on the number of LLM models that marked them as relevant.</p>
+<div class="space-y-8">
+    <!-- LLM Relevance Analysis Card -->
+    <div class="bg-white overflow-hidden shadow-xl rounded-lg">
+        <div class="p-6 sm:px-8 border-b border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-900">LLM Relevance Analysis</h2>
+            <p class="mt-1 text-sm text-gray-600">Distribution of articles based on the number of LLM models that marked them as relevant.</p>
+        </div>
+        <div class="p-6 sm:px-8">
+            {% if llm_chart_data and llm_chart_data|length > 2 %}
+                <div class="chart-container" style="position: relative; height:60vh; width:100%">
+                    <canvas id="llmAnalysisChart"></canvas>
+                </div>
+            {% else %}
+                <div class="text-center py-12"><h3 class="text-sm font-medium text-gray-900">Not Enough Data</h3><p class="mt-1 text-sm text-gray-500">There is not enough article or LLM result data to generate this chart.</p></div>
+            {% endif %}
+        </div>
     </div>
-    <div class="p-6 sm:px-8">
-        {% if chart_data and chart_data|length > 2 %}
-            <div class="chart-container" style="position: relative; height:60vh; width:100%">
-                <canvas id="analysisChart"></canvas>
-            </div>
-        {% else %}
-            <div class="text-center py-12">
-                <h3 class="text-sm font-medium text-gray-900">Not Enough Data</h3>
-                <p class="mt-1 text-sm text-gray-500">There is not enough article or LLM result data to generate an analysis chart.</p>
-            </div>
-        {% endif %}
+
+    <!-- Verificator Progress Card -->
+    <div class="bg-white overflow-hidden shadow-xl rounded-lg">
+        <div class="p-6 sm:px-8 border-b border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-900">Verificator Progress</h2>
+            <p class="mt-1 text-sm text-gray-600">Percentage of assigned articles reviewed by each verificator.</p>
+        </div>
+        <div class="p-6 sm:px-8">
+            {% if verificator_chart_data and verificator_chart_data|length > 2 %}
+                 <div class="chart-container" style="position: relative; height:50vh; width:100%">
+                    <canvas id="verificatorProgressChart"></canvas>
+                </div>
+            {% else %}
+                <div class="text-center py-12"><h3 class="text-sm font-medium text-gray-900">Not Enough Data</h3><p class="mt-1 text-sm text-gray-500">There is not enough verificator assignment data to generate this chart.</p></div>
+            {% endif %}
+        </div>
     </div>
 </div>
 
 <script>
-    const chartData = JSON.parse('{{ chart_data|safe }}');
-
-    if (Object.keys(chartData).length > 0) {
-        const ctx = document.getElementById('analysisChart').getContext('2d');
-        new Chart(ctx, {
+    // --- Chart 1: LLM Relevance Analysis ---
+    const llmChartData = JSON.parse('{{ llm_chart_data|safe }}');
+    if (Object.keys(llmChartData).length > 0 && llmChartData.labels.length > 0) {
+        const llmCtx = document.getElementById('llmAnalysisChart').getContext('2d');
+        new Chart(llmCtx, {
             type: 'bar',
-            data: chartData,
+            data: llmChartData,
             options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                // UPDATED: Reverted interaction mode to 'index'
-                interaction: {
-                    mode: 'index', // This groups tooltips by the x-axis index (the bar)
-                    intersect: false, // Tooltip will appear when hovering over the bar, not just a specific point
-                },
+                responsive: true, maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
                 plugins: {
-                    title: {
-                        display: true,
-                        text: 'Article Distribution by LLM Relevance Count'
-                    },
+                    title: { display: true, text: 'Article Distribution by LLM Relevance Count' },
                     tooltip: {
                         callbacks: {
-                            // This callback formats each line in the grouped tooltip
                             label: function(context) {
                                 let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
+                                if (label) { label += ': '; }
                                 const count = context.dataset.raw_data[context.dataIndex];
                                 label += count + ' papers';
                                 return label;
                             },
-                            // The footer callback calculates the total for the entire bar stack
                             footer: function(tooltipItems) {
                                 let total = 0;
-                                // The tooltipItems array contains an item for each dataset in the stack
                                 tooltipItems.forEach(function(tooltipItem) {
-                                    const dataset = tooltipItem.chart.data.datasets[tooltipItem.datasetIndex];
-                                    total += dataset.raw_data[tooltipItem.dataIndex];
+                                    total += tooltipItem.chart.data.datasets[tooltipItem.datasetIndex].raw_data[tooltipItem.dataIndex];
                                 });
                                 return 'Total Papers: ' + total;
                             }
@@ -74,24 +77,59 @@
                     }
                 },
                 scales: {
-                    x: {
-                        stacked: true,
-                        title: {
-                            display: true,
-                            text: 'Number of LLMs Marking as Relevant'
-                        }
-                    },
-                    y: {
-                        stacked: true,
-                        title: {
-                            display: true,
-                            text: 'Percentage of Total Articles'
-                        },
-                        ticks: {
-                            callback: function(value) {
-                                return value.toFixed(0) + '%'
+                    x: { stacked: true, title: { display: true, text: 'Number of LLMs Marking as Relevant' } },
+                    y: { stacked: true, title: { display: true, text: 'Percentage of Total Articles' }, ticks: { callback: function(value) { return value.toFixed(0) + '%' } } }
+                }
+            }
+        });
+    }
+
+    // --- Chart 2: Verificator Progress ---
+    const verificatorChartData = JSON.parse('{{ verificator_chart_data|safe }}');
+    if (Object.keys(verificatorChartData).length > 0 && verificatorChartData.labels.length > 0) {
+        const verificatorCtx = document.getElementById('verificatorProgressChart').getContext('2d');
+        new Chart(verificatorCtx, {
+            type: 'bar',
+            data: verificatorChartData,
+            options: {
+                indexAxis: 'y', // This makes the bar chart horizontal
+                responsive: true, maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }, // Hide legend as it's not needed for a single dataset
+                    title: { display: true, text: 'Verificator Review Completion' },
+                    tooltip: {
+                        callbacks: {
+                            // The title of the tooltip will be the percentage
+                            title: function(tooltipItems) {
+                                const item = tooltipItems[0];
+                                const percentage = item.raw.toFixed(2);
+                                return `Completion: ${percentage}%`;
+                            },
+                            // The body of the tooltip will show the detailed breakdown
+                            label: function(context) {
+                                return ''; // We will use the footer for all details
+                            },
+                            footer: function(tooltipItems) {
+                                const item = tooltipItems[0];
+                                const customData = item.dataset.custom_data[item.dataIndex];
+                                const lines = [
+                                    `Reviewed: ${customData.reviewed_count} / ${customData.total_assigned}`,
+                                    `  - Relevant: ${customData.relevant_count}`,
+                                    `  - Not Relevant: ${customData.not_relevant_count}`
+                                ];
+                                return lines;
                             }
                         }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Percentage Reviewed (%)' },
+                        min: 0,
+                        max: 100
+                    },
+                    y: {
+                        title: { display: true, text: 'Verificator' }
                     }
                 }
             }

@@ -190,33 +190,28 @@ def submit_verification(article_id):
 @bp.route("/analysis")
 @login_required
 def analysis():
-    """Renders the analysis page with chart data."""
+    """Renders the analysis page with data for both charts."""
     if current_user.role != "admin":
         abort(403)
 
-    # --- Data Aggregation ---
-    # { relevant_count: { source: article_count } }
-    analysis_data = defaultdict(lambda: defaultdict(int))
+    # --- Chart 1: LLM Relevance Analysis ---
+    llm_analysis_data = defaultdict(lambda: defaultdict(int))
     all_sources = set()
-    total_articles = 0
-
     articles = Article.query.options(db.joinedload(Article.llm_results)).all()
-    if not articles:
-        return render_template("analysis.html", chart_data=json.dumps({}))
-
     total_articles = len(articles)
-    for article in articles:
-        relevant_count = sum(1 for result in article.llm_results if result.is_relevant)
-        source = article.source or "Unknown"
-        analysis_data[relevant_count][source] += 1
-        all_sources.add(source)
 
-    # --- Prepare Data for Chart.js ---
+    if total_articles > 0:
+        for article in articles:
+            relevant_count = sum(
+                1 for result in article.llm_results if result.is_relevant
+            )
+            source = article.source or "Unknown"
+            llm_analysis_data[relevant_count][source] += 1
+            all_sources.add(source)
+
     sorted_sources = sorted(list(all_sources))
-    labels = sorted(analysis_data.keys())
-
-    datasets = []
-    # Define some colors for the chart
+    llm_labels = sorted(llm_analysis_data.keys())
+    llm_datasets = []
     colors = [
         "rgba(67, 56, 202, 0.7)",
         "rgba(219, 39, 119, 0.7)",
@@ -224,29 +219,77 @@ def analysis():
         "rgba(16, 185, 129, 0.7)",
         "rgba(99, 102, 241, 0.7)",
     ]
-
     for i, source in enumerate(sorted_sources):
-        data_points = []
-        raw_data_points = []
-        for label in labels:
-            count = analysis_data[label].get(source, 0)
-            # Calculate percentage
-            percentage = (count / total_articles) * 100 if total_articles > 0 else 0
-            data_points.append(percentage)
-            raw_data_points.append(count)
-
-        datasets.append(
+        data_points = [
+            (
+                (llm_analysis_data[label].get(source, 0) / total_articles) * 100
+                if total_articles > 0
+                else 0
+            )
+            for label in llm_labels
+        ]
+        raw_data_points = [
+            llm_analysis_data[label].get(source, 0) for label in llm_labels
+        ]
+        llm_datasets.append(
             {
                 "label": source,
                 "data": data_points,
-                "raw_data": raw_data_points,  # Custom property for tooltip
+                "raw_data": raw_data_points,
                 "backgroundColor": colors[i % len(colors)],
             }
         )
 
-    chart_data = {"labels": [str(label) for label in labels], "datasets": datasets}
+    llm_chart_data = {
+        "labels": [str(label) for label in llm_labels],
+        "datasets": llm_datasets,
+    }
 
-    return render_template("analysis.html", chart_data=json.dumps(chart_data))
+    # --- Chart 2: Verificator Progress Analysis ---
+    verificator_stats = []
+    verificators = User.query.filter_by(role="verificator").all()
+    for v in verificators:
+        total_assigned = v.assignments.count()
+        if total_assigned == 0:
+            continue
+        reviewed_count = v.assignments.filter_by(is_reviewed=True).count()
+        relevant_count = v.assignments.filter_by(
+            is_reviewed=True, is_relevant=True
+        ).count()
+        not_relevant_count = reviewed_count - relevant_count
+        percentage = (reviewed_count / total_assigned) * 100
+        verificator_stats.append(
+            {
+                "username": v.username,
+                "percentage": percentage,
+                "total_assigned": total_assigned,
+                "reviewed_count": reviewed_count,
+                "relevant_count": relevant_count,
+                "not_relevant_count": not_relevant_count,
+            }
+        )
+
+    sorted_stats = sorted(
+        verificator_stats, key=lambda x: x["percentage"], reverse=True
+    )
+
+    verificator_chart_data = {
+        "labels": [s["username"] for s in sorted_stats],
+        "datasets": [
+            {
+                "label": "Review Progress (%)",
+                "data": [s["percentage"] for s in sorted_stats],
+                "backgroundColor": "rgba(219, 39, 119, 0.7)",
+                "custom_data": sorted_stats,  # Pass all stats for the tooltip
+            }
+        ],
+    }
+
+    return render_template(
+        "analysis.html",
+        llm_chart_data=json.dumps(llm_chart_data),
+        verificator_chart_data=json.dumps(verificator_chart_data),
+    )
 
 
 @bp.route("/logout")
