@@ -1,6 +1,7 @@
 from collections import defaultdict
 import random
 import click
+import numpy as np
 import pandas as pd
 import pickle
 import zipfile
@@ -8,6 +9,7 @@ import os
 import re
 from app import db
 from app.models import User, Article, LLMResult, VerificationAssignment
+from app.seed import users_to_seed
 from sqlalchemy.exc import IntegrityError
 
 
@@ -25,30 +27,21 @@ def register_commands(app):
         """Seeds the database with predefined users."""
         with app.app_context():
             click.echo("Seeding users...")
-            users_to_seed = [
-                {"username": "waff", "password": "waff", "role": "verificator"},
-                {"username": "hady", "password": "hady", "role": "verificator"},
-                {"username": "amal", "password": "amal", "role": "verificator"},
-                {"username": "wicak", "password": "wicak", "role": "verificator"},
-                {"username": "elva", "password": "elva", "role": "verificator"},
-                {"username": "fadil", "password": "fadil", "role": "verificator"},
-                {"username": "humay", "password": "humay", "role": "verificator"},
-                {"username": "admin", "password": "admin", "role": "admin"},
-            ]
             for user_data in users_to_seed:
-                user = User.query.filter_by(username=user_data["username"]).first()
+                username = user_data.get("username", "")
+                password = user_data.get("password", "")
+                role = user_data.get("role", "verificator")
+                user = User.query.filter_by(username=username).first()
                 if not user:
-                    new_user = User(username=user_data["username"])
-                    new_user.set_password(user_data["password"])
+                    new_user = User(username=username, role=role)
+                    new_user.set_password(password)
                     db.session.add(new_user)
-                    click.echo(
-                        f"  - User '{user_data['username']}' ({user_data['role']}) created."
-                    )
+                    click.echo(f"  - User '{username}' ({role}) created.")
                 else:
                     # Optionally update the role of existing users
-                    user.role = user_data["role"]
+                    user.role = role
                     click.echo(
-                        f"  - User '{user_data['username']}' already exists. Role set to '{user_data['role']}'."
+                        f"  - User '{username}' already exists. Role set to '{role}'."
                     )
             db.session.commit()
             click.echo("User seeding complete.")
@@ -57,29 +50,35 @@ def register_commands(app):
     @click.argument("csv_filepath", type=click.Path(exists=True))
     def seed_articles(csv_filepath):
         """Seeds the database with articles from a CSV file."""
+        total = 0
         with app.app_context():
             click.echo(f"Seeding articles from '{csv_filepath}'...")
             try:
                 df = pd.read_csv(csv_filepath)
                 if "source" not in df.columns:
                     df["source"] = None
+                df = df.replace({np.nan: None})
 
-                for index, row in df.iterrows():
+                values = df.values
+
+                for idx, (doi, title, abstract, year, source) in enumerate(values):
                     # Check if article with this DOI already exists
-                    exists = Article.query.filter_by(doi=row["DOI"]).first()
+                    article_id = idx + 1
+                    exists = Article.query.get(article_id)
                     if not exists:
                         article = Article(
-                            doi=row["DOI"],
-                            title=row["Title"],
-                            abstract=row["Abstract"],
-                            year=int(row["Year"]) if pd.notna(row["Year"]) else None,
-                            source=row["source"] if pd.notna(row["source"]) else None,
+                            doi=(doi or ""),
+                            title=(title or ""),
+                            abstract=abstract,
+                            year=year,
+                            source=source,
                         )
                         db.session.add(article)
-                        click.echo(f"  - Added article: {row['DOI']}")
+                        total += 1
+                        click.echo(f"  - Added article: ID {article_id}")
                     else:
                         click.echo(
-                            f"  - Article with DOI {row['DOI']} already exists. Skipping."
+                            f"  - Article with ID {article_id} already exists. Skipping."
                         )
 
                 db.session.commit()
@@ -87,6 +86,7 @@ def register_commands(app):
             except Exception as e:
                 click.echo(f"An error occurred during article seeding: {e}", err=True)
                 db.session.rollback()
+        print(f"Seeding done with total {total} articles")
 
     @app.cli.command("seed-llm")
     @click.argument("zip_filepaths", nargs=-1, type=click.Path(exists=True))
@@ -124,7 +124,7 @@ def register_commands(app):
                             if not match:
                                 continue
 
-                            article_id = int(match.group(1))
+                            article_id = int(match.group(1)) + 1
                             if not Article.query.get(article_id):
                                 click.echo(
                                     f"  - Warning: No article found for ID {article_id}. Skipping.",

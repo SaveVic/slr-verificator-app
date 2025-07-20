@@ -28,7 +28,7 @@ class Article(db.Model):
     """Article model to store research paper information."""
 
     id = db.Column(db.Integer, primary_key=True)
-    doi = db.Column(db.String(120), unique=True, nullable=True, index=True)
+    doi = db.Column(db.String(120), nullable=True)
     title = db.Column(db.Text, nullable=True)
     abstract = db.Column(db.Text, nullable=True)
     year = db.Column(db.Integer, nullable=True)
