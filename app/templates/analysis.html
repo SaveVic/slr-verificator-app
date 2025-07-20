@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis - {{ super() }}{% endblock %}
+
+{% block head_scripts %}
+    <!-- Include Chart.js library -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="bg-white overflow-hidden shadow-xl rounded-lg">
+    <div class="p-6 sm:px-8 border-b border-gray-200">
+        <h2 class="text-2xl font-bold text-gray-900">LLM Relevance Analysis</h2>
+        <p class="mt-1 text-sm text-gray-600">Distribution of articles based on the number of LLM models that marked them as relevant.</p>
+    </div>
+    <div class="p-6 sm:px-8">
+        {% if chart_data and chart_data|length > 2 %}
+            <div class="chart-container" style="position: relative; height:60vh; width:100%">
+                <canvas id="analysisChart"></canvas>
+            </div>
+        {% else %}
+            <div class="text-center py-12">
+                <h3 class="text-sm font-medium text-gray-900">Not Enough Data</h3>
+                <p class="mt-1 text-sm text-gray-500">There is not enough article or LLM result data to generate an analysis chart.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    const chartData = JSON.parse('{{ chart_data|safe }}');
+
+    if (Object.keys(chartData).length > 0) {
+        const ctx = document.getElementById('analysisChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                // UPDATED: Reverted interaction mode to 'index'
+                interaction: {
+                    mode: 'index', // This groups tooltips by the x-axis index (the bar)
+                    intersect: false, // Tooltip will appear when hovering over the bar, not just a specific point
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Article Distribution by LLM Relevance Count'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            // This callback formats each line in the grouped tooltip
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                const count = context.dataset.raw_data[context.dataIndex];
+                                label += count + ' papers';
+                                return label;
+                            },
+                            // The footer callback calculates the total for the entire bar stack
+                            footer: function(tooltipItems) {
+                                let total = 0;
+                                // The tooltipItems array contains an item for each dataset in the stack
+                                tooltipItems.forEach(function(tooltipItem) {
+                                    const dataset = tooltipItem.chart.data.datasets[tooltipItem.datasetIndex];
+                                    total += dataset.raw_data[tooltipItem.dataIndex];
+                                });
+                                return 'Total Papers: ' + total;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Number of LLMs Marking as Relevant'
+                        }
+                    },
+                    y: {
+                        stacked: true,
+                        title: {
+                            display: true,
+                            text: 'Percentage of Total Articles'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                return value.toFixed(0) + '%'
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

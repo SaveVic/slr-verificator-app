@@ -1,4 +1,14 @@
-from flask import render_template, redirect, url_for, flash, request, Blueprint, abort
+from collections import defaultdict
+from flask import (
+    json,
+    render_template,
+    redirect,
+    url_for,
+    flash,
+    request,
+    Blueprint,
+    abort,
+)
 from flask_login import login_user, logout_user, login_required, current_user
 from app.models import User, Article, VerificationAssignment
 from app import db
@@ -175,6 +185,68 @@ def submit_verification(article_id):
     except ValueError:
         pass
     return redirect(url_for("main.dashboard_redirect"))
+
+
+@bp.route("/analysis")
+@login_required
+def analysis():
+    """Renders the analysis page with chart data."""
+    if current_user.role != "admin":
+        abort(403)
+
+    # --- Data Aggregation ---
+    # { relevant_count: { source: article_count } }
+    analysis_data = defaultdict(lambda: defaultdict(int))
+    all_sources = set()
+    total_articles = 0
+
+    articles = Article.query.options(db.joinedload(Article.llm_results)).all()
+    if not articles:
+        return render_template("analysis.html", chart_data=json.dumps({}))
+
+    total_articles = len(articles)
+    for article in articles:
+        relevant_count = sum(1 for result in article.llm_results if result.is_relevant)
+        source = article.source or "Unknown"
+        analysis_data[relevant_count][source] += 1
+        all_sources.add(source)
+
+    # --- Prepare Data for Chart.js ---
+    sorted_sources = sorted(list(all_sources))
+    labels = sorted(analysis_data.keys())
+
+    datasets = []
+    # Define some colors for the chart
+    colors = [
+        "rgba(67, 56, 202, 0.7)",
+        "rgba(219, 39, 119, 0.7)",
+        "rgba(245, 158, 11, 0.7)",
+        "rgba(16, 185, 129, 0.7)",
+        "rgba(99, 102, 241, 0.7)",
+    ]
+
+    for i, source in enumerate(sorted_sources):
+        data_points = []
+        raw_data_points = []
+        for label in labels:
+            count = analysis_data[label].get(source, 0)
+            # Calculate percentage
+            percentage = (count / total_articles) * 100 if total_articles > 0 else 0
+            data_points.append(percentage)
+            raw_data_points.append(count)
+
+        datasets.append(
+            {
+                "label": source,
+                "data": data_points,
+                "raw_data": raw_data_points,  # Custom property for tooltip
+                "backgroundColor": colors[i % len(colors)],
+            }
+        )
+
+    chart_data = {"labels": [str(label) for label in labels], "datasets": datasets}
+
+    return render_template("analysis.html", chart_data=json.dumps(chart_data))
 
 
 @bp.route("/logout")
